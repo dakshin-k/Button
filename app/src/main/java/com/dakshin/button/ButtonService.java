@@ -21,6 +21,8 @@ import android.widget.Toast;
 import java.io.IOException;
 import java.security.Key;
 
+import static android.content.ContentValues.TAG;
+
 public class ButtonService extends Service implements View.OnTouchListener
 {
     private WindowManager windowManager;
@@ -36,9 +38,9 @@ public class ButtonService extends Service implements View.OnTouchListener
                 //disable the button before taking screenshot
                 params.alpha=0;
                 windowManager.updateViewLayout(button,params);
-                process.getOutputStream().write(("input keyevent "+KeyEvent.KEYCODE_SYSRQ+'\n').getBytes());
+                process.getOutputStream().write(("input keyevent "+KeyEvent.KEYCODE_POWER+'\n').getBytes());
                 process.getOutputStream().flush();
-                Thread.sleep(500);
+                Thread.sleep(1000);
                 params.alpha=1.0f;
                 windowManager.updateViewLayout(button,params);
             } catch (IOException | InterruptedException e) {
@@ -72,14 +74,7 @@ public class ButtonService extends Service implements View.OnTouchListener
 //        params.gravity= Gravity.CENTER_VERTICAL|Gravity.END;
         windowManager.addView(button,params);
         button.setOnTouchListener(this);
-        button.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override
-            public boolean onLongClick(View view) {
-                Toast.makeText(ButtonService.this, "Long click detected!", Toast.LENGTH_SHORT).show();
-                Log.d("tag","long click!");
-                return true;
-            }
-        });
+
 
     }
     @Override
@@ -89,19 +84,17 @@ public class ButtonService extends Service implements View.OnTouchListener
         super.onDestroy();
     }
 
-    private int lastAction;
     private int initialX;
     private int initialY;
     private float initialTouchX;
     private float initialTouchY;
-    private long lastTapTime=0;
     private long downTapTime;
     @Override
     public boolean onTouch(View v, MotionEvent event) {
         long curTime=System.currentTimeMillis();
+        Log.d("tag", "onTouch: "+event.toString());
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-
                 //remember the initial position.
                 initialX = params.x;
                 initialY = params.y;
@@ -110,7 +103,6 @@ public class ButtonService extends Service implements View.OnTouchListener
                 initialTouchX = event.getRawX();
                 initialTouchY = event.getRawY();
 
-                lastAction = event.getAction();
                 downTapTime= System.currentTimeMillis();
 
                 //long click detector
@@ -123,29 +115,17 @@ public class ButtonService extends Service implements View.OnTouchListener
                 //As we implemented on touch listener with ACTION_MOVE,
                 //we have to check if the previous action was ACTION_DOWN
                 //to identify if the user clicked the view or not.
-                if (lastAction == MotionEvent.ACTION_DOWN) {
+
                     //down followed by up = a click
-                    long timeDiff=curTime-lastTapTime;
-//                    Log.d("tag","timediff = "+timeDiff);
+                    long timeDiff=curTime-downTapTime;
                     if(timeDiff<=150)
                         try {
-                            process.getOutputStream().write(("input keyevent "+ KeyEvent.KEYCODE_POWER+"\n").getBytes());
+                            process.getOutputStream().write(("su -c input keyevent "+KeyEvent.KEYCODE_BACK+"\n").getBytes());
                             process.getOutputStream().flush();
                         } catch (IOException e) {
                             Log.e("tag","Shell command failed");
                         }
-                    else
-                        try {
-                            process.getOutputStream().write(("input keyevent "+KeyEvent.KEYCODE_BACK+"\n").getBytes());
-                            process.getOutputStream().flush();
-                         } catch (IOException e) {
-                            Log.e("tag", "Shell command failed");
-                        }
-                    lastTapTime=curTime;
                     return true;
-                }
-
-                return true;
             case MotionEvent.ACTION_MOVE:
                 if(Math.abs(event.getRawY()-initialTouchY)>100&&Math.abs(event.getRawX()-initialTouchX)>100)
                     handler.removeCallbacks(longPressed);
@@ -155,7 +135,6 @@ public class ButtonService extends Service implements View.OnTouchListener
 
                 //Update the layout with new X & Y coordinate
                 windowManager.updateViewLayout(button, params);
-                lastAction = event.getAction();
                 return true;
         }
         return false;
